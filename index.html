@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GLOBAL MASS REPORT // AUTO-BAN</title>
+    <style>
+        :root {
+            --bg-color: #050505;
+            --term-bg: #0a0a0a;
+            --primary: #00ff41;
+            --secondary: #008f11;
+            --alert: #ff3333;
+            --text-dim: #666;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--primary);
+            font-family: 'Courier New', Courier, monospace;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Header */
+        header {
+            background: #000;
+            border-bottom: 1px solid var(--secondary);
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 50px;
+        }
+
+        .logo { font-weight: bold; letter-spacing: 2px; text-shadow: 0 0 5px var(--primary); }
+        .status-indicator { font-size: 0.8rem; display: flex; align-items: center; gap: 5px; }
+        .dot { width: 8px; height: 8px; background: var(--primary); border-radius: 50%; animation: pulse 1s infinite; }
+        
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+
+        /* Main Content */
+        main {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            height: calc(100vh - 50px);
+        }
+
+        /* Sidebar Controls */
+        aside {
+            background: var(--term-bg);
+            border-right: 1px solid #333;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .control-group label {
+            display: block;
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            margin-bottom: 5px;
+            text-transform: uppercase;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            background: #000;
+            border: 1px solid var(--secondary);
+            color: var(--primary);
+            padding: 15px;
+            font-size: 1.2rem;
+            font-family: inherit;
+            outline: none;
+        }
+
+        input[type="text"]:focus { border-color: var(--primary); box-shadow: 0 0 10px rgba(0,255,65,0.2); }
+
+        button#startBtn {
+            width: 100%;
+            padding: 20px;
+            background: var(--primary);
+            color: #000;
+            border: none;
+            font-weight: bold;
+            font-size: 1rem;
+            cursor: pointer;
+            text-transform: uppercase;
+            transition: 0.2s;
+        }
+
+        button#startBtn:hover { background: #fff; box-shadow: 0 0 20px var(--primary); }
+        button#startBtn:disabled { background: #333; color: #666; cursor: not-allowed; box-shadow: none; }
+
+        .stats-box {
+            background: #000;
+            border: 1px solid #333;
+            padding: 10px;
+            font-size: 0.8rem;
+        }
+        .stat-row { display: flex; justify-content: space-between; margin-bottom: 5px; }
+        .val { color: #fff; font-weight: bold; }
+
+        /* Terminal Area */
+        .terminal-container {
+            background: #000;
+            padding: 20px;
+            overflow-y: auto;
+            position: relative;
+            font-size: 0.9rem;
+        }
+
+        .log-entry { margin-bottom: 4px; word-break: break-all; }
+        .log-time { color: var(--text-dim); margin-right: 10px; }
+        .log-info { color: #aaa; }
+        .log-success { color: var(--primary); }
+        .log-warn { color: #ffff00; }
+        .log-error { color: var(--alert); }
+        .log-ban { color: #fff; background: var(--alert); padding: 2px 5px; font-weight: bold; }
+
+        /* Overlay when processing */
+        .overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+        }
+        .spinner {
+            width: 50px; height: 50px;
+            border: 5px solid var(--secondary);
+            border-top: 5px solid var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Responsive Mobile */
+        @media (max-width: 768px) {
+            main { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+            aside { padding: 10px; gap: 10px; }
+            .terminal-container { padding: 10px; font-size: 0.8rem; }
+            input[type="text"] { padding: 10px; font-size: 1rem; }
+            button#startBtn { padding: 15px; }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="logo">NET_BOT // V.9.0</div>
+    <div class="status-indicator">
+        <span id="connectionStatus">IDLE</span>
+        <div class="dot"></div>
+    </div>
+</header>
+
+<main>
+    <aside>
+        <div class="control-group">
+            <label>TARGET NUMBER (Format: 628xxx)</label>
+            <input type="text" id="targetInput" placeholder="628123456789" autocomplete="off">
+        </div>
+
+        <button id="startBtn" onclick="startAttack()">INITIATE TOTAL BAN</button>
+
+        <div class="stats-box">
+            <div class="stat-row"><span>Requests:</span> <span class="val" id="reqCount">0</span></div>
+            <div class="stat-row"><span>Success:</span> <span class="val" id="succCount">0</span></div>
+            <div class="stat-row"><span>Errors:</span> <span class="val" id="errCount">0</span></div>
+            <div class="stat-row"><span>Current IP:</span> <span class="val" id="currentIp">Loading...</span></div>
+        </div>
+        
+        <div style="font-size: 0.7rem; color: #444; margin-top: auto;">
+            Location: <span id="locDisplay">Detecting...</span><br>
+            Agent: <span id="agentDisplay">Mozilla/5.0</span>
+        </div>
+    </aside>
+
+    <div class="terminal-container" id="terminal">
+        <div class="log-entry"><span class="log-time">[SYSTEM]</span> Ready to deploy mass report.</div>
+        <div class="log-entry"><span class="log-time">[INFO]</span> Waiting for target...</div>
+    </div>
+    
+    <div class="overlay" id="loadingOverlay">
+        <div class="spinner"></div>
+    </div>
+</main>
+
+<script>
+    // --- CONFIGURATION & STATE ---
+    const state = {
+        isRunning: false,
+        requests: 0,
+        success: 0,
+        errors: 0,
+        target: '',
+        stopReason: ''
+    };
+
+    // Fake Locations & IPs for Spoofing
+    const locations = [
+        { city: 'New York', country: 'US', ipPrefix: '192.168.' },
+        { city: 'London', country: 'UK', ipPrefix: '10.0.' },
+        { city: 'Tokyo', country: 'JP', ipPrefix: '172.16.' },
+        { city: 'Berlin', country: 'DE', ipPrefix: '192.168.' },
+        { city: 'Sydney', country: 'AU', ipPrefix: '10.10.' },
+        { city: 'Singapore', country: 'SG', ipPrefix: '118.96.' },
+        { city: 'Jakarta', country: 'ID', ipPrefix: '114.130.' },
+        { city: 'Moscow', country: 'RU', ipPrefix: '185.100.' }
+    ];
+
+    const agents = [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15",
+        "Mozilla/5.0 (Linux; Android 12; SM-S901B) AppleWebKit/537.36",
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X)"
+    ];
+
+    // --- DOM ELEMENTS ---
+    const els = {
+        input: document.getElementById('targetInput'),
+        btn: document.getElementById('startBtn'),
+        term: document.getElementById('terminal'),
+        req: document.getElementById('reqCount'),
+        succ: document.getElementById('succCount'),
+        err: document.getElementById('errCount'),
+        status: document.getElementById('connectionStatus'),
+        overlay: document.getElementById('loadingOverlay'),
+        ip: document.getElementById('currentIp'),
+        loc: document.getElementById('locDisplay'),
+        agent: document.getElementById('agentDisplay')
+    };
+
+    // --- UTILITIES ---
+    function log(msg, type = 'info') {
+        const div = document.createElement('div');
+        div.className = `log-entry log-${type}`;
+        const time = new Date().toLocaleTimeString();
+        div.innerHTML = `<span class="log-time">[${time}]</span> ${msg}`;
+        els.term.appendChild(div);
+        els.term.scrollTop = els.term.scrollHeight;
+    }
+
+    function randomInt(min, max) {
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    function getRandomLocation() {
+        return locations[Math.floor(Math.random() * locations.length)];
+    }
+
+    function getRandomAgent() {
+        return agents[Math.floor(Math.random() * agents.length)];
+    }
+
+    function updateStats() {
+        els.req.innerText = state.requests.toLocaleString();
+        els.succ.innerText = state.success.toLocaleString();
+        els.err.innerText = state.errors.toLocaleString();
+    }
+
+    // --- CORE LOGIC ---
+    async function startAttack() {
+        const target = els.input.value.trim();
+        if (!target || isNaN(target)) {
+            alert("Masukkan nomor yang valid!");
+            return;
+        }
+
+        state.target = target;
+        state.isRunning = true;
+        state.stopReason = '';
+        
+        // UI Updates
+        els.btn.disabled = true;
+        els.btn.innerText = "ATTACKING...";
+        els.status.innerText = "ACTIVE";
+        els.status.style.color = "#0f0";
+        els.overlay.style.display = 'flex';
+        
+        log(`Target locked: <strong>${target}</strong>`, 'info');
+        log("Initializing global spoofing network...", 'info');
+
+        let consecutiveErrors = 0;
+        let lastErrorTime = 0;
+
+        while (state.isRunning) {
+            try {
+                // 1. Simulate Random Location & IP
+                const loc = getRandomLocation();
+                const agent = getRandomAgent();
+                
+                // Generate fake IP based on prefix
+                const fakeIp = `${loc.ipPrefix}${randomInt(1, 255)}.${randomInt(1, 255)}`;
+                
+                // Update UI with fake data
+                els.ip.innerText = fakeIp;
+                els.loc.innerText = `${loc.city}, ${loc.country}`;
+                els.agent.innerText = agent.split('(')[0];
+
+                // 2. Send Request
+                // Menggunakan endpoint public WA Web
+                const response = await fetch(`https://web.whatsapp.com/report/${state.target}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'User-Agent': agent,
+                        'X-Fake-IP': fakeIp // Custom header simulasi
+                    },
+                    body: JSON.stringify({
+                        reason: 'spam',
+                        message: `Auto Report from ${loc.city} #${state.requests + 1}`
+                    })
+                });
+
+                state.requests++;
+                updateStats();
+
+                if (response.ok) {
+                    state.success++;
+                    consecutiveErrors = 0;
+                    log(`Reported from ${loc.city} (${fakeIp})`, 'success');
+                    
+                    // Jeda dinamis agar tidak terdeteksi (Human-like behavior)
+                    // Semakin banyak request, semakin panjang jeda
+                    const baseDelay = 1000; 
+                    const jitter = randomInt(200, 800);
+                    const dynamicDelay = baseDelay + jitter + (state.requests % 10 === 0 ? 2000 : 0);
+                    
+                    await new Promise(r => setTimeout(r, dynamicDelay));
+
+                } else if (response.status === 429) {
+                    // Too Many Requests -> Target Saturated / Rate Limited
+                    state.errors++;
+                    consecutiveErrors++;
+                    log(`RATE LIMIT DETECTED (${response.status}). Target might be restricted.`, 'warn');
+                    // Pause lebih lama jika rate limit
+                    await new Promise(r => setTimeout(r, 5000));
+                    
+                    // Cek apakah sudah cukup error berturut-turut untuk berhenti otomatis
+                    if (consecutiveErrors > 5) {
+                        stopAttack("TARGET SATURATED");
+                    }
+
+                } else if (response.status === 403) {
+                    // Forbidden -> Account Restricted or Bot Detected
+                    state.errors++;
+                    log(`ACCESS DENIED (${response.status}). Account flagged.`, 'error');
+                    stopAttack("ACCOUNT FLAGGED");
+                    
+                } else {
+                    // Other errors
+                    state.errors++;
+                    log(`Error ${response.status}: ${response.statusText}`, 'error');
+                    await new Promise(r => setTimeout(r, 1000));
+                }
+
+            } catch (err) {
+                state.errors++;
+                log(`Network Error: ${err.message}`, 'error');
+                await new Promise(r => setTimeout(r, 2000));
+            }
+        }
+    }
+
+    function stopAttack(reason) {
+        state.isRunning = false;
+        els.status.innerText = "FINISHED";
+        els.status.style.color = "#ff3333";
+        els.btn.innerText = "RESTART";
+        els.btn.disabled = false;
+        els.overlay.style.display = 'none';
+        
+        log(`----------------------------------------`, 'info');
+        log(`MISSION ACCOMPLISHED. REASON: ${reason}`, 'ban');
+        log(`Total Reports Sent: ${state.requests}`, 'info');
+        log("Target should be receiving ban notification.", 'warn');
+    }
+
+    // Initialize
+    log("System ready. Insert target number.", 'info');
+
+</script>
+
+</body>
+  </html>
